@@ -28,13 +28,29 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
 
         val biometricAuthenticator = BiometricAuthenticator(this)
+        val requestBuilder = AuthenticationRequestBuilder()
 
         setContent {
             FingerprintUnlockTheme {
                 FingerprintUnlockScreen(
                     onAuthenticate = { onSuccess, onFailure ->
+
+                        val request = requestBuilder.build(
+                            deviceId = "android-device"
+                        )
+
                         biometricAuthenticator.authenticate(
-                            onSuccess = onSuccess,
+                            challenge = request.challenge,
+                            onSuccess = { authenticationProof ->
+
+                                val authenticatedRequest =
+                                    request.copy(
+                                        authenticationProof =
+                                            authenticationProof
+                                    )
+
+                                onSuccess(authenticatedRequest)
+                            },
                             onFailure = onFailure
                         )
                     }
@@ -47,7 +63,7 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun FingerprintUnlockScreen(
     onAuthenticate: (
-        onSuccess: () -> Unit,
+        onSuccess: (AuthenticationRequest) -> Unit,
         onFailure: () -> Unit
     ) -> Unit
 ) {
@@ -77,12 +93,21 @@ fun FingerprintUnlockScreen(
                 isAuthenticated = false
 
                 onAuthenticate(
-                    {
-                        message = "Fingerprint verified successfully!"
+                    { authenticatedRequest ->
+                        message =
+                            "Fingerprint verified successfully!"
+
                         isAuthenticated = true
+
+                        // The authenticated request is now ready
+                        // for the future laptop communication layer.
+                        println(
+                            "Authentication request: " +
+                                    authenticatedRequest
+                        )
                     },
                     {
-                        message = "Fingerprint not recognized"
+                        message = "Fingerprint authentication failed"
                         isAuthenticated = false
                     }
                 )
