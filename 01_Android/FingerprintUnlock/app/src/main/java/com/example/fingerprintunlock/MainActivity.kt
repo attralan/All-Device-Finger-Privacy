@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,8 +29,16 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val biometricAuthenticator = BiometricAuthenticator(this)
-        val requestBuilder = AuthenticationRequestBuilder()
+        val biometricAuthenticator =
+            BiometricAuthenticator(this)
+
+        val requestBuilder =
+            AuthenticationRequestBuilder()
+
+        val pairingManager = PairingManager(
+            transport = WiFiTransport(),
+            keyStoreManager = AndroidKeyStoreManager()
+        )
 
         setContent {
             FingerprintUnlockTheme {
@@ -53,6 +63,17 @@ class MainActivity : FragmentActivity() {
                             },
                             onFailure = onFailure
                         )
+                    },
+                    onPair = { host, port, onResult ->
+
+                        val result =
+                            pairingManager.sendPairingRequest(
+                                host = host,
+                                port = port,
+                                deviceId = "android-device"
+                            )
+
+                        onResult(result)
                     }
                 )
             }
@@ -65,8 +86,14 @@ fun FingerprintUnlockScreen(
     onAuthenticate: (
         onSuccess: (AuthenticationRequest) -> Unit,
         onFailure: () -> Unit
+    ) -> Unit,
+    onPair: (
+        host: String,
+        port: Int,
+        onResult: (Boolean) -> Unit
     ) -> Unit
 ) {
+
     var message by remember {
         mutableStateOf("Ready to authenticate")
     }
@@ -75,8 +102,18 @@ fun FingerprintUnlockScreen(
         mutableStateOf(false)
     }
 
+    var laptopIp by remember {
+        mutableStateOf("")
+    }
+
+    var laptopPort by remember {
+        mutableStateOf("8080")
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -89,25 +126,29 @@ fun FingerprintUnlockScreen(
 
         Button(
             onClick = {
-                message = "Waiting for fingerprint..."
+
+                message =
+                    "Waiting for fingerprint..."
+
                 isAuthenticated = false
 
                 onAuthenticate(
                     { authenticatedRequest ->
+
                         message =
                             "Fingerprint verified successfully!"
 
                         isAuthenticated = true
 
-                        // The authenticated request is now ready
-                        // for the future laptop communication layer.
                         println(
                             "Authentication request: " +
                                     authenticatedRequest
                         )
                     },
                     {
-                        message = "Fingerprint authentication failed"
+                        message =
+                            "Fingerprint authentication failed"
+
                         isAuthenticated = false
                     }
                 )
@@ -120,6 +161,93 @@ fun FingerprintUnlockScreen(
                 } else {
                     "Unlock with Fingerprint"
                 }
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(32.dp)
+        )
+
+        Text(
+            text = "Laptop Pairing"
+        )
+
+        Spacer(
+            modifier = Modifier.height(12.dp)
+        )
+
+        OutlinedTextField(
+            value = laptopIp,
+            onValueChange = {
+                laptopIp = it
+            },
+            label = {
+                Text("Laptop IP Address")
+            },
+            singleLine = true
+        )
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
+        OutlinedTextField(
+            value = laptopPort,
+            onValueChange = {
+                laptopPort = it
+            },
+            label = {
+                Text("Laptop Port")
+            },
+            singleLine = true
+        )
+
+        Spacer(
+            modifier = Modifier.height(12.dp)
+        )
+
+        Button(
+            onClick = {
+
+                val port = laptopPort.toIntOrNull()
+
+                if (laptopIp.isBlank()) {
+
+                    message =
+                        "Enter laptop IP address"
+
+                    return@Button
+                }
+
+                if (port == null ||
+                    port !in 1..65535
+                ) {
+
+                    message =
+                        "Enter a valid port"
+
+                    return@Button
+                }
+
+                message =
+                    "Connecting to laptop..."
+
+                onPair(
+                    laptopIp,
+                    port
+                ) { success ->
+
+                    message =
+                        if (success) {
+                            "Pairing request sent"
+                        } else {
+                            "Could not connect to laptop"
+                        }
+                }
+            }
+        ) {
+            Text(
+                text = "Pair with Laptop"
             )
         }
     }
