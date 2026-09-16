@@ -65,7 +65,6 @@ E007 = Security verification failed
 
 To be decided:
 
-- Bluetooth
 - Wi-Fi / LAN
 
 ## Protocol Version
