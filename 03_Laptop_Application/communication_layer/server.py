@@ -3,14 +3,14 @@ Fingerprint Laptop Unlock System
 
 Communication Server
 
-Responsible for:
-- Receiving Android authentication requests
-- Parsing incoming messages
-- Sending authentication responses
-- Managing TCP connection lifecycle
+Handles:
+- Android TCP connections
+- JSON message receiving
+- Message routing
+- Response sending
 
 Version:
-1.1
+2.0
 """
 
 
@@ -20,14 +20,11 @@ import logging
 
 
 
-from communication_layer.message_parser import (
-    MessageParser
+from communication_layer.message_handler import (
+    MessageHandler
 )
 
 
-from communication_layer.response_sender import (
-    ResponseSender
-)
 
 
 
@@ -41,53 +38,39 @@ class CommunicationServer:
     def __init__(
         self,
         authentication_manager,
-        host="127.0.0.1",
+        pairing_manager=None,
+        host="0.0.0.0",
         port=8080
     ):
-        """
-        Initialize communication server.
-
-        Args:
-
-            authentication_manager:
-                Handles authentication workflow
-
-            host:
-                Server address
-
-            port:
-                Listening port
-        """
-
-
-        self.authentication_manager = (
-            authentication_manager
-        )
 
 
         self.host = host
 
-
         self.port = port
 
 
-        self.server_socket = None
 
+        self.server_socket = None
 
         self.running = False
 
 
 
-        self.message_parser = MessageParser()
+        self.message_handler = MessageHandler(
+
+            authentication_manager,
+
+            pairing_manager
+
+        )
 
 
-        self.response_sender = ResponseSender()
 
 
 
     def start(self):
         """
-        Start communication server.
+        Start TCP server.
         """
 
 
@@ -120,7 +103,9 @@ class CommunicationServer:
 
                 (
                     self.host,
+
                     self.port
+
                 )
 
             )
@@ -130,9 +115,6 @@ class CommunicationServer:
             self.server_socket.listen(5)
 
 
-
-            # Important:
-            # Allows shutdown checking
 
             self.server_socket.settimeout(1)
 
@@ -196,15 +178,6 @@ class CommunicationServer:
                 except OSError:
 
 
-                    if self.running:
-
-                        logging.error(
-
-                            "Socket error occurred"
-
-                        )
-
-
                     break
 
 
@@ -214,7 +187,7 @@ class CommunicationServer:
 
             logging.error(
 
-                "Server error: %s",
+                "Server start error: %s",
 
                 error
 
@@ -229,38 +202,41 @@ class CommunicationServer:
 
 
 
+
+
     def handle_client(
         self,
         client_socket
     ):
         """
-        Handle Android client request.
+        Receive and process Android messages.
         """
 
 
         try:
 
 
-            received_data = (
+            data = client_socket.recv(
 
-                client_socket.recv(
-                    4096
-                )
+                4096
 
             )
 
 
 
-            if not received_data:
+            if not data:
+
 
                 return
 
 
 
-            json_data = json.loads(
+            message = json.loads(
 
-                received_data.decode(
+                data.decode(
+
                     "utf-8"
+
                 )
 
             )
@@ -271,18 +247,29 @@ class CommunicationServer:
 
                 "Received message: %s",
 
-                json_data
+                message
 
             )
 
 
 
-            request = (
+            response = self.message_handler.handle(
 
-                self.message_parser
-                .parse_authentication_request(
+                message
 
-                    json_data
+            )
+
+
+
+            client_socket.send(
+
+                (
+                    json.dumps(response)
+                    + "\n"
+
+                ).encode(
+
+                    "utf-8"
 
                 )
 
@@ -290,22 +277,9 @@ class CommunicationServer:
 
 
 
-            response = (
+            logging.info(
 
-                self.authentication_manager
-                .authenticate(
-
-                    request
-
-                )
-
-            )
-
-
-
-            self.response_sender.send(
-
-                client_socket,
+                "Response sent: %s",
 
                 response
 
@@ -318,7 +292,7 @@ class CommunicationServer:
 
             logging.error(
 
-                "Communication handling error: %s",
+                "Communication error: %s",
 
                 error
 
@@ -330,26 +304,19 @@ class CommunicationServer:
 
 
                 "protocol_version":
-
                     "1.0",
 
 
-
                 "message_type":
-
-                    "AUTHENTICATION_RESPONSE",
-
-
-
-                "status":
-
                     "ERROR",
 
 
+                "status":
+                    "ERROR",
+
 
                 "error_code":
-
-                    str(error)
+                    "E003"
 
             }
 
@@ -361,10 +328,13 @@ class CommunicationServer:
                 client_socket.send(
 
                     json.dumps(
+
                         error_response
-                    )
-                    .encode(
+
+                    ).encode(
+
                         "utf-8"
+
                     )
 
                 )
@@ -384,24 +354,12 @@ class CommunicationServer:
 
 
 
+
+
     def stop(self):
         """
-        Stop server safely.
+        Stop server.
         """
-
-
-        if not self.running:
-
-            return
-
-
-
-        logging.info(
-
-            "Stopping communication server"
-
-        )
-
 
 
         self.running = False
@@ -413,9 +371,7 @@ class CommunicationServer:
 
             try:
 
-
                 self.server_socket.close()
-
 
 
             except Exception:

@@ -3,8 +3,16 @@ Fingerprint Laptop Unlock System
 
 GUI Application Entry Point
 
+Initializes:
+- Database
+- Device Management
+- Security
+- Authentication
+- Communication Server
+- GUI
+
 Version:
-3.0
+5.0
 """
 
 
@@ -30,13 +38,17 @@ from application.controller import (
 
 
 
-from database import DatabaseManager
+from database import (
+    DatabaseManager
+)
+
 
 
 from device_manager import (
     DeviceRegistry,
     PairingManager
 )
+
 
 
 from security_layer import (
@@ -46,6 +58,7 @@ from security_layer import (
 )
 
 
+
 from windows_integration import (
     WindowsAPI,
     SessionManager,
@@ -53,11 +66,13 @@ from windows_integration import (
 )
 
 
+
 from authentication_service import (
     AuthenticationManager,
     RequestValidator,
     ResultHandler
 )
+
 
 
 from communication_layer import (
@@ -69,7 +84,15 @@ from communication_layer import (
 
 
 def create_backend():
+    """
+    Create backend services.
+    """
 
+
+
+    # ======================
+    # Database
+    # ======================
 
 
     database = DatabaseManager()
@@ -82,6 +105,21 @@ def create_backend():
 
 
 
+    logging.info(
+
+        "Database initialized"
+
+    )
+
+
+
+
+
+    # ======================
+    # Device Management
+    # ======================
+
+
     device_registry = DeviceRegistry(
 
         database
@@ -89,12 +127,27 @@ def create_backend():
     )
 
 
-    PairingManager(
+    pairing_manager = PairingManager(
 
         device_registry
 
     )
 
+
+
+    logging.info(
+
+        "Device manager initialized"
+
+    )
+
+
+
+
+
+    # ======================
+    # Security
+    # ======================
 
 
     key_manager = KeyManager(
@@ -119,6 +172,13 @@ def create_backend():
 
 
 
+
+
+    # ======================
+    # Windows
+    # ======================
+
+
     windows_api = WindowsAPI()
 
 
@@ -139,6 +199,13 @@ def create_backend():
 
 
 
+
+
+    # ======================
+    # Authentication
+    # ======================
+
+
     authentication_manager = AuthenticationManager(
 
         RequestValidator(),
@@ -157,9 +224,26 @@ def create_backend():
 
 
 
-    server = CommunicationServer(
 
-        authentication_manager
+
+    # ======================
+    # Communication
+    # ======================
+
+
+    communication_server = CommunicationServer(
+
+        authentication_manager,
+
+        pairing_manager
+
+    )
+
+
+
+    logging.info(
+
+        "Communication initialized"
 
     )
 
@@ -167,9 +251,11 @@ def create_backend():
 
     return (
 
-        server,
+        communication_server,
 
-        device_registry
+        device_registry,
+
+        pairing_manager
 
     )
 
@@ -188,6 +274,7 @@ def main():
         level=logging.INFO,
 
         format=
+
         "%(asctime)s | %(levelname)s | %(message)s"
 
     )
@@ -195,7 +282,9 @@ def main():
 
 
     app = QApplication(
+
         sys.argv
+
     )
 
 
@@ -208,7 +297,16 @@ def main():
 
 
 
-    communication_server, device_registry = create_backend()
+    (
+        communication_server,
+
+        device_registry,
+
+        pairing_manager
+
+    ) = create_backend()
+
+
 
 
 
@@ -216,9 +314,13 @@ def main():
 
         communication_server,
 
-        device_registry
+        device_registry,
+
+        pairing_manager
 
     )
+
+
 
 
 
@@ -230,6 +332,14 @@ def main():
 
 
     window.show()
+
+
+
+    logging.info(
+
+        "GUI started"
+
+    )
 
 
 
